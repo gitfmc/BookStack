@@ -15,41 +15,41 @@ $factory->define(\BookStack\Auth\User::class, function ($faker) {
     return [
         'name' => $faker->name,
         'email' => $faker->email,
-        'password' => str_random(10),
-        'remember_token' => str_random(10),
+        'password' => Str::random(10),
+        'remember_token' => Str::random(10),
         'email_confirmed' => 1
     ];
 });
 
-$factory->define(\BookStack\Entities\Bookshelf::class, function ($faker) {
+$factory->define(\BookStack\Entities\Models\Bookshelf::class, function ($faker) {
     return [
         'name' => $faker->sentence,
-        'slug' => str_random(10),
+        'slug' => Str::random(10),
         'description' => $faker->paragraph
     ];
 });
 
-$factory->define(\BookStack\Entities\Book::class, function ($faker) {
+$factory->define(\BookStack\Entities\Models\Book::class, function ($faker) {
     return [
         'name' => $faker->sentence,
-        'slug' => str_random(10),
+        'slug' => Str::random(10),
         'description' => $faker->paragraph
     ];
 });
 
-$factory->define(\BookStack\Entities\Chapter::class, function ($faker) {
+$factory->define(\BookStack\Entities\Models\Chapter::class, function ($faker) {
     return [
         'name' => $faker->sentence,
-        'slug' => str_random(10),
+        'slug' => Str::random(10),
         'description' => $faker->paragraph
     ];
 });
 
-$factory->define(\BookStack\Entities\Page::class, function ($faker) {
+$factory->define(\BookStack\Entities\Models\Page::class, function ($faker) {
     $html = '<p>' . implode('</p>', $faker->paragraphs(5)) . '</p>';
     return [
         'name' => $faker->sentence,
-        'slug' => str_random(10),
+        'slug' => Str::random(10),
         'html' => $html,
         'text' => strip_tags($html),
         'revision_count' => 1

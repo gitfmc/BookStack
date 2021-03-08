@@ -3,8 +3,17 @@
 @section('body')
 
     <div class="container px-xl py-s">
-        <div class="icon-list inline block">
-            @include('components.expand-toggle', ['target' => '.entity-list.compact .entity-item-snippet', 'key' => 'home-details'])
+        <div class="grid half">
+            <div>
+                <div class="icon-list inline block">
+                    @include('components.expand-toggle', ['target' => '.entity-list.compact .entity-item-snippet', 'key' => 'home-details'])
+                </div>
+            </div>
+            <div class="text-m-right">
+                <div class="icon-list inline block">
+                    @include('partials.dark-mode-toggle', ['classes' => 'text-muted icon-list-item text-primary'])
+                </div>
+            </div>
         </div>
     </div>
 
@@ -20,13 +29,13 @@
                     </div>
                 @endif
 
-                <div id="{{ $signedIn ? 'recently-viewed' : 'recent-books' }}" class="card mb-xl">
-                    <h3 class="card-title">{{ trans('entities.' . ($signedIn ? 'my_recently_viewed' : 'books_recent')) }}</h3>
+                <div id="{{ auth()->check() ? 'recently-viewed' : 'recent-books' }}" class="card mb-xl">
+                    <h3 class="card-title">{{ trans('entities.' . (auth()->check() ? 'my_recently_viewed' : 'books_recent')) }}</h3>
                     <div class="px-m">
                         @include('partials.entity-list', [
                         'entities' => $recents,
                         'style' => 'compact',
-                        'emptyText' => $signedIn ? trans('entities.no_pages_viewed') : trans('entities.books_empty')
+                        'emptyText' => auth()->check() ? trans('entities.no_pages_viewed') : trans('entities.books_empty')
                         ])
                     </div>
                 </div>
@@ -34,7 +43,7 @@
 
             <div>
                 <div id="recent-pages" class="card mb-xl">
-                    <h3 class="card-title"><a class="no-color" href="{{ baseUrl("/pages/recently-updated") }}">{{ trans('entities.recently_updated_pages') }}</a></h3>
+                    <h3 class="card-title"><a class="no-color" href="{{ url("/pages/recently-updated") }}">{{ trans('entities.recently_updated_pages') }}</a></h3>
                     <div id="recently-updated-pages" class="px-m">
                         @include('partials.entity-list', [
                         'entities' => $recentlyUpdatedPages,
@@ -56,7 +65,5 @@
 
         </div>
     </div>
-
-
 
 @stop

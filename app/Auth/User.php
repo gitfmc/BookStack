@@ -1,16 +1,38 @@
 <?php namespace BookStack\Auth;
 
+use BookStack\Api\ApiToken;
+use BookStack\Interfaces\Loggable;
 use BookStack\Model;
 use BookStack\Notifications\ResetPassword;
 use BookStack\Uploads\Image;
+use Carbon\Carbon;
+use Exception;
 use Illuminate\Auth\Authenticatable;
 use Illuminate\Auth\Passwords\CanResetPassword;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 
-class User extends Model implements AuthenticatableContract, CanResetPasswordContract
+/**
+ * Class User
+ * @property string $id
+ * @property string $name
+ * @property string $email
+ * @property string $password
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ * @property bool $email_confirmed
+ * @property int $image_id
+ * @property string $external_auth_id
+ * @property string $system_name
+ * @property Collection $roles
+ */
+class User extends Model implements AuthenticatableContract, CanResetPasswordContract, Loggable
 {
     use Authenticatable, CanResetPassword, Notifiable;
 
@@ -26,17 +48,28 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
      */
     protected $fillable = ['name', 'email'];
 
+    protected $casts = ['last_activity_at' => 'datetime'];
+
     /**
      * The attributes excluded from the model's JSON form.
      * @var array
      */
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = [
+        'password', 'remember_token', 'system_name', 'email_confirmed', 'external_auth_id', 'email',
+        'created_at', 'updated_at', 'image_id',
+    ];
 
     /**
      * This holds the user's permissions when loaded.
-     * @var array
+     * @var ?Collection
      */
     protected $permissions;
+
+    /**
+     * This holds the default user when loaded.
+     * @var null|User
+     */
+    protected static $defaultUser = null;
 
     /**
      * Returns the default public user.
@@ -44,7 +77,12 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
      */
     public static function getDefault()
     {
-        return static::where('system_name', '=', 'public')->first();
+        if (!is_null(static::$defaultUser)) {
+            return static::$defaultUser;
+        }
+        
+        static::$defaultUser = static::where('system_name', '=', 'public')->first();
+        return static::$defaultUser;
     }
 
     /**
@@ -70,12 +108,10 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
 
     /**
      * Check if the user has a role.
-     * @param $role
-     * @return mixed
      */
-    public function hasRole($role)
+    public function hasRole($roleId): bool
     {
-        return $this->roles->pluck('name')->contains($role);
+        return $this->roles->pluck('id')->contains($roleId);
     }
 
     /**
@@ -89,57 +125,67 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
     }
 
     /**
-     * Get all permissions belonging to a the current user.
-     * @param bool $cache
-     * @return \Illuminate\Database\Eloquent\Relations\HasManyThrough
+     * Attach the default system role to this user.
      */
-    public function permissions($cache = true)
+    public function attachDefaultRole(): void
     {
-        if (isset($this->permissions) && $cache) {
-            return $this->permissions;
+        $roleId = setting('registration-role');
+        if ($roleId && $this->roles()->where('id', '=', $roleId)->count() === 0) {
+            $this->roles()->attach($roleId);
         }
-        $this->load('roles.permissions');
-        $permissions = $this->roles->map(function ($role) {
-            return $role->permissions;
-        })->flatten()->unique();
-        $this->permissions = $permissions;
-        return $permissions;
     }
 
     /**
      * Check if the user has a particular permission.
-     * @param $permissionName
-     * @return bool
      */
-    public function can($permissionName)
+    public function can(string $permissionName): bool
     {
         if ($this->email === 'guest') {
             return false;
         }
-        return $this->permissions()->pluck('name')->contains($permissionName);
+
+        return $this->permissions()->contains($permissionName);
+    }
+
+    /**
+     * Get all permissions belonging to a the current user.
+     */
+    protected function permissions(): Collection
+    {
+        if (isset($this->permissions)) {
+            return $this->permissions;
+        }
+
+        $this->permissions = $this->newQuery()->getConnection()->table('role_user', 'ru')
+            ->select('role_permissions.name as name')->distinct()
+            ->leftJoin('permission_role', 'ru.role_id', '=', 'permission_role.role_id')
+            ->leftJoin('role_permissions', 'permission_role.permission_id', '=', 'role_permissions.id')
+            ->where('ru.user_id', '=', $this->id)
+            ->get()
+            ->pluck('name');
+
+        return $this->permissions;
+    }
+
+    /**
+     * Clear any cached permissions on this instance.
+     */
+    public function clearPermissionCache()
+    {
+        $this->permissions = null;
     }
 
     /**
      * Attach a role to this user.
-     * @param Role $role
      */
     public function attachRole(Role $role)
     {
-        $this->attachRoleId($role->id);
-    }
-
-    /**
-     * Attach a role id to this user.
-     * @param $id
-     */
-    public function attachRoleId($id)
-    {
-        $this->roles()->attach($id);
+        $this->roles()->attach($role->id);
     }
 
     /**
      * Get the social account associated with this user.
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * @return HasMany
      */
     public function socialAccounts()
     {
@@ -168,15 +214,15 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
      */
     public function getAvatar($size = 50)
     {
-        $default = baseUrl('/user_avatar.png');
+        $default = url('/user_avatar.png');
         $imageId = $this->image_id;
         if ($imageId === 0 || $imageId === '0' || $imageId === null) {
             return $default;
         }
 
         try {
-            $avatar = $this->avatar ? baseUrl($this->avatar->getThumb($size, $size, false)) : $default;
-        } catch (\Exception $err) {
+            $avatar = $this->avatar ? url($this->avatar->getThumb($size, $size, false)) : $default;
+        } catch (Exception $err) {
             $avatar = $default;
         }
         return $avatar;
@@ -184,7 +230,7 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
 
     /**
      * Get the avatar for the user.
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return BelongsTo
      */
     public function avatar()
     {
@@ -192,21 +238,41 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
     }
 
     /**
-     * Get the url for editing this user.
-     * @return string
+     * Get the API tokens assigned to this user.
      */
-    public function getEditUrl()
+    public function apiTokens(): HasMany
     {
-        return baseUrl('/settings/users/' . $this->id);
+        return $this->hasMany(ApiToken::class);
+    }
+
+    /**
+     * Get the last activity time for this user.
+     */
+    public function scopeWithLastActivityAt(Builder $query)
+    {
+        $query->addSelect(['activities.created_at as last_activity_at'])
+            ->leftJoinSub(function (\Illuminate\Database\Query\Builder $query) {
+                $query->from('activities')->select('user_id')
+                    ->selectRaw('max(created_at) as created_at')
+                    ->groupBy('user_id');
+            }, 'activities', 'users.id', '=', 'activities.user_id');
+    }
+
+    /**
+     * Get the url for editing this user.
+     */
+    public function getEditUrl(string $path = ''): string
+    {
+        $uri = '/settings/users/' . $this->id . '/' . trim($path, '/');
+        return url(rtrim($uri, '/'));
     }
 
     /**
      * Get the url that links to this user's profile.
-     * @return mixed
      */
-    public function getProfileUrl()
+    public function getProfileUrl(): string
     {
-        return baseUrl('/user/' . $this->id);
+        return url('/user/' . $this->id);
     }
 
     /**
@@ -216,12 +282,12 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
      */
     public function getShortName($chars = 8)
     {
-        if (strlen($this->name) <= $chars) {
+        if (mb_strlen($this->name) <= $chars) {
             return $this->name;
         }
 
         $splitName = explode(' ', $this->name);
-        if (strlen($splitName[0]) <= $chars) {
+        if (mb_strlen($splitName[0]) <= $chars) {
             return $splitName[0];
         }
 
@@ -236,5 +302,13 @@ class User extends Model implements AuthenticatableContract, CanResetPasswordCon
     public function sendPasswordResetNotification($token)
     {
         $this->notify(new ResetPassword($token));
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function logDescriptor(): string
+    {
+        return "({$this->id}) {$this->name}";
     }
 }

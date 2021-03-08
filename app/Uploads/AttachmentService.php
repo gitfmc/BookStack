@@ -2,18 +2,31 @@
 
 use BookStack\Exceptions\FileUploadException;
 use Exception;
+use Illuminate\Contracts\Filesystem\Factory as FileSystem;
+use Illuminate\Contracts\Filesystem\Filesystem as FileSystemInstance;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
-class AttachmentService extends UploadService
+class AttachmentService
 {
+
+    protected $fileSystem;
+
+    /**
+     * AttachmentService constructor.
+     */
+    public function __construct(FileSystem $fileSystem)
+    {
+        $this->fileSystem = $fileSystem;
+    }
+
 
     /**
      * Get the storage that will be used for storing files.
-     * @return \Illuminate\Contracts\Filesystem\Filesystem
      */
-    protected function getStorage()
+    protected function getStorage(): FileSystemInstance
     {
-        $storageType = config('filesystems.default');
+        $storageType = config('filesystems.attachments');
 
         // Override default location if set to local public to ensure not visible.
         if ($storageType === 'local') {
@@ -87,12 +100,8 @@ class AttachmentService extends UploadService
 
     /**
      * Save a new File attachment from a given link and name.
-     * @param string $name
-     * @param string $link
-     * @param int $page_id
-     * @return Attachment
      */
-    public function saveNewFromLink($name, $link, $page_id)
+    public function saveNewFromLink(string $name, string $link, int $page_id): Attachment
     {
         $largestExistingOrder = Attachment::where('uploaded_to', '=', $page_id)->max('order');
         return Attachment::forceCreate([
@@ -108,27 +117,25 @@ class AttachmentService extends UploadService
     }
 
     /**
-     * Updates the file ordering for a listing of attached files.
-     * @param array $attachmentList
-     * @param $pageId
+     * Updates the ordering for a listing of attached files.
      */
-    public function updateFileOrderWithinPage($attachmentList, $pageId)
+    public function updateFileOrderWithinPage(array $attachmentOrder, string $pageId)
     {
-        foreach ($attachmentList as $index => $attachment) {
-            Attachment::where('uploaded_to', '=', $pageId)->where('id', '=', $attachment['id'])->update(['order' => $index]);
+        foreach ($attachmentOrder as $index => $attachmentId) {
+            Attachment::query()->where('uploaded_to', '=', $pageId)
+                ->where('id', '=', $attachmentId)
+                ->update(['order' => $index]);
         }
     }
 
 
     /**
      * Update the details of a file.
-     * @param Attachment $attachment
-     * @param $requestData
-     * @return Attachment
      */
-    public function updateFile(Attachment $attachment, $requestData)
+    public function updateFile(Attachment $attachment, array $requestData): Attachment
     {
         $attachment->name = $requestData['name'];
+
         if (isset($requestData['link']) && trim($requestData['link']) !== '') {
             $attachment->path = $requestData['link'];
             if (!$attachment->external) {
@@ -136,6 +143,7 @@ class AttachmentService extends UploadService
                 $attachment->external = true;
             }
         }
+
         $attachment->save();
         return $attachment;
     }
@@ -185,9 +193,9 @@ class AttachmentService extends UploadService
         $storage = $this->getStorage();
         $basePath = 'uploads/files/' . Date('Y-m-M') . '/';
 
-        $uploadFileName = str_random(16) . '.' . $uploadedFile->getClientOriginalExtension();
+        $uploadFileName = Str::random(16) . '.' . $uploadedFile->getClientOriginalExtension();
         while ($storage->exists($basePath . $uploadFileName)) {
-            $uploadFileName = str_random(3) . $uploadFileName;
+            $uploadFileName = Str::random(3) . $uploadFileName;
         }
 
         $attachmentPath = $basePath . $uploadFileName;

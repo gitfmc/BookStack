@@ -1,6 +1,6 @@
 <?php
 /**
- * Common elements found throughout many areas of BookStack. / Загальні елементи, використовуються в багатьох областях BookStack.
+ * Common elements found throughout many areas of BookStack.
  */
 return [
 
@@ -33,13 +33,19 @@ return [
     'copy' => 'Копіювати',
     'reply' => 'Відповісти',
     'delete' => 'Видалити',
+    'delete_confirm' => 'Підтвердити видалення',
     'search' => 'Шукати',
     'search_clear' => 'Очистити пошук',
     'reset' => 'Скинути',
     'remove' => 'Видалити',
     'add' => 'Додати',
-    
+    'fullscreen' => 'На весь екран',
+
     // Sort Options
+    'sort_options' => 'Параметри сортування',
+    'sort_direction_toggle' => 'Перемикач напрямку сортування',
+    'sort_ascending' => 'За зростанням',
+    'sort_descending' => 'За спаданням',
     'sort_name' => 'Ім\'я',
     'sort_created_at' => 'Дата створення',
     'sort_updated_at' => 'Дата оновлення',
@@ -55,11 +61,15 @@ return [
     'grid_view' => 'Вигляд Сіткою',
     'list_view' => 'Вигляд Списком',
     'default' => 'За замовчуванням',
+    'breadcrumb' => 'Навігація',
 
     // Header
+    'profile_menu' => 'Меню профілю',
     'view_profile' => 'Переглянути профіль',
     'edit_profile' => 'Редагувати профіль',
-    
+    'dark_mode' => 'Темний режим',
+    'light_mode' => 'Світлий режим',
+
     // Layout tabs
     'tab_info' => 'Інфо',
     'tab_content' => 'Вміст',
@@ -67,4 +77,9 @@ return [
     // Email Content
     'email_action_help' => 'Якщо у вас виникають проблеми при натисканні кнопки ":actionText", скопіюйте та вставте URL у свій веб-браузер:',
     'email_rights' => 'Всі права захищені',
+
+    // Footer Link Options
+    // Not directly used but available for convenience to users.
+    'privacy_policy' => 'Privacy Policy',
+    'terms_of_service' => 'Terms of Service',
 ];

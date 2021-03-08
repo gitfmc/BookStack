@@ -1,6 +1,6 @@
 <?php namespace Tests;
 
-use BookStack\Entities\Bookshelf;
+use BookStack\Entities\Models\Bookshelf;
 
 class HomepageTest extends TestCase
 {
@@ -38,10 +38,14 @@ class HomepageTest extends TestCase
         $name = 'My custom homepage';
         $content = str_repeat('This is the body content of my custom homepage.', 20);
         $customPage = $this->newPage(['name' => $name, 'html' => $content]);
-        $this->setSettings(['app-homepage' => $customPage->id]);
+        $this->setSettings([
+            'app-homepage' => $customPage->id,
+            'app-homepage-type' => 'page'
+        ]);
 
         $homeVisit = $this->get('/');
         $homeVisit->assertSee($name);
+        $homeVisit->assertElementNotExists('#home-default');
 
         $pageDeleteReq = $this->delete($customPage->getUrl());
         $pageDeleteReq->assertStatus(302);
@@ -52,6 +56,23 @@ class HomepageTest extends TestCase
         $homeVisit = $this->get('/');
         $homeVisit->assertSee($name);
         $homeVisit->assertStatus(200);
+    }
+
+    public function test_custom_homepage_can_be_deleted_once_custom_homepage_no_longer_used()
+    {
+        $this->asEditor();
+        $name = 'My custom homepage';
+        $content = str_repeat('This is the body content of my custom homepage.', 20);
+        $customPage = $this->newPage(['name' => $name, 'html' => $content]);
+        $this->setSettings([
+            'app-homepage' => $customPage->id,
+            'app-homepage-type' => 'default'
+        ]);
+
+        $pageDeleteReq = $this->delete($customPage->getUrl());
+        $pageDeleteReq->assertStatus(302);
+        $pageDeleteReq->assertSessionHas('success');
+        $pageDeleteReq->assertSessionMissing('error');
     }
 
     public function test_set_book_homepage()
@@ -77,16 +98,16 @@ class HomepageTest extends TestCase
     {
         $editor = $this->getEditor();
         setting()->putUser($editor, 'bookshelves_view_type', 'grid');
+        $shelf = Bookshelf::query()->firstOrFail();
 
         $this->setSettings(['app-homepage-type' => 'bookshelves']);
 
         $this->asEditor();
         $homeVisit = $this->get('/');
         $homeVisit->assertSee('Shelves');
-        $homeVisit->assertSee('bookshelf-grid-item grid-card');
         $homeVisit->assertSee('grid-card-content');
-        $homeVisit->assertSee('grid-card-footer');
         $homeVisit->assertSee('featured-image-container');
+        $homeVisit->assertElementContains('.grid-card', $shelf->name);
 
         $this->setSettings(['app-homepage-type' => false]);
         $this->test_default_homepage_visible();

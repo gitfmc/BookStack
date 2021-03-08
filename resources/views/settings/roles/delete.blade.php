@@ -12,14 +12,14 @@
 
             <p>{{ trans('settings.role_delete_confirm', ['roleName' => $role->display_name]) }}</p>
 
-            <form action="{{ baseUrl("/settings/roles/delete/{$role->id}") }}" method="POST">
+            <form action="{{ url("/settings/roles/delete/{$role->id}") }}" method="POST">
                 {!! csrf_field() !!}
                 <input type="hidden" name="_method" value="DELETE">
 
                 @if($role->users->count() > 0)
                     <div class="form-group">
                         <p>{{ trans('settings.role_delete_users_assigned', ['userCount' => $role->users->count()]) }}</p>
-                        @include('form.role-select', ['options' => $roles, 'name' => 'migration_role_id'])
+                        @include('form.role-select', ['options' => $roles, 'name' => 'migrate_role_id'])
                     </div>
                 @endif
 
@@ -31,8 +31,8 @@
                     </div>
                     <div>
                         <div class="form-group text-right">
-                            <a href="{{ baseUrl("/settings/roles/{$role->id}") }}" class="button outline">{{ trans('common.cancel') }}</a>
-                            <button type="submit" class="button primary">{{ trans('common.confirm') }}</button>
+                            <a href="{{ url("/settings/roles/{$role->id}") }}" class="button outline">{{ trans('common.cancel') }}</a>
+                            <button type="submit" class="button">{{ trans('common.confirm') }}</button>
                         </div>
                     </div>
                 </div>

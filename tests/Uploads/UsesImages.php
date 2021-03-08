@@ -1,28 +1,43 @@
 <?php namespace Tests\Uploads;
 
-
-use BookStack\Entities\Page;
+use BookStack\Entities\Models\Page;
 use Illuminate\Http\UploadedFile;
 
 trait UsesImages
 {
     /**
-     * Get the path to our basic test image.
-     * @return string
+     * Get the path to a file in the test-data-directory.
      */
-    protected function getTestImageFilePath()
+    protected function getTestImageFilePath(?string $fileName = null): string
     {
-        return base_path('tests/test-data/test-image.png');
+        if (is_null($fileName)) {
+            $fileName = 'test-image.png';
+        }
+
+        return base_path('tests/test-data/' . $fileName);
+    }
+
+    /**
+     * Creates a new temporary image file using the given name,
+     * with the content decoded from the given bas64 file name.
+     * Is generally used for testing sketchy files that could trip AV.
+     */
+    protected function newTestImageFromBase64(string $base64FileName, $imageFileName): UploadedFile
+    {
+        $imagePath = implode(DIRECTORY_SEPARATOR, [sys_get_temp_dir(), $imageFileName]);
+        $base64FilePath = $this->getTestImageFilePath($base64FileName);
+        $data = file_get_contents($base64FilePath);
+        $decoded = base64_decode($data);
+        file_put_contents($imagePath, $decoded);
+        return new UploadedFile($imagePath, $imageFileName, 'image/png', null, true);
     }
 
     /**
      * Get a test image that can be uploaded
-     * @param $fileName
-     * @return UploadedFile
      */
-    protected function getTestImage($fileName)
+    protected function getTestImage(string $fileName, ?string $testDataFileName = null): UploadedFile
     {
-        return new UploadedFile($this->getTestImageFilePath(), $fileName, 'image/png', 5238, null, true);
+        return new UploadedFile($this->getTestImageFilePath($testDataFileName), $fileName, 'image/png', null, true);
     }
 
     /**
@@ -36,11 +51,8 @@ trait UsesImages
 
     /**
      * Get the path for a test image.
-     * @param $type
-     * @param $fileName
-     * @return string
      */
-    protected function getTestImagePath($type, $fileName)
+    protected function getTestImagePath(string $type, string $fileName): string
     {
         return '/uploads/images/' . $type . '/' . Date('Y-m') . '/' . $fileName;
     }
@@ -52,9 +64,9 @@ trait UsesImages
      * @param string $contentType
      * @return \Illuminate\Foundation\Testing\TestResponse
      */
-    protected function uploadImage($name, $uploadedTo = 0, $contentType = 'image/png')
+    protected function uploadImage($name, $uploadedTo = 0, $contentType = 'image/png', ?string $testDataFileName = null)
     {
-        $file = $this->getTestImage($name);
+        $file = $this->getTestImage($name, $testDataFileName);
         return $this->withHeader('Content-Type', $contentType)
             ->call('POST', '/images/gallery', ['uploaded_to' => $uploadedTo], [], ['file' => $file], []);
     }
@@ -66,22 +78,23 @@ trait UsesImages
      * @param Page|null $page
      * @return array
      */
-    protected function uploadGalleryImage(Page $page = null)
+    protected function uploadGalleryImage(Page $page = null, ?string $testDataFileName = null)
     {
         if ($page === null) {
             $page = Page::query()->first();
         }
 
-        $imageName = 'first-image.png';
+        $imageName = $testDataFileName ?? 'first-image.png';
         $relPath = $this->getTestImagePath('gallery', $imageName);
         $this->deleteImage($relPath);
 
-        $upload = $this->uploadImage($imageName, $page->id);
+        $upload = $this->uploadImage($imageName, $page->id, 'image/png', $testDataFileName);
         $upload->assertStatus(200);
         return [
             'name' => $imageName,
             'path' => $relPath,
-            'page' => $page
+            'page' => $page,
+            'response' => json_decode($upload->getContent()),
         ];
     }
 

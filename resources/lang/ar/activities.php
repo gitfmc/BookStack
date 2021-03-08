@@ -1,11 +1,9 @@
 <?php
-
+/**
+ * Activity text strings.
+ * Is used for all the text within activity logs & notifications.
+ */
 return [
-
-    /**
-     * Activity text strings.
-     * Is used for all the text within activity logs & notifications.
-     */
 
     // Pages
     'page_create'                 => 'تم إنشاء صفحة',
@@ -37,6 +35,15 @@ return [
     'book_sort'                   => 'تم سرد الكتاب',
     'book_sort_notification'      => 'تمت إعادة سرد الكتاب بنجاح',
 
+    // Bookshelves
+    'bookshelf_create'            => 'تم إنشاء رف الكتب',
+    'bookshelf_create_notification'    => 'تم إنشاء الرف بنجاح',
+    'bookshelf_update'                 => 'تم تحديث الرف',
+    'bookshelf_update_notification'    => 'تم تحديث الرف بنجاح',
+    'bookshelf_delete'                 => 'تم تحديث الرف',
+    'bookshelf_delete_notification'    => 'تم حذف الرف بنجاح',
+
     // Other
     'commented_on'                => 'تم التعليق',
+    'permissions_update'          => 'تحديث الأذونات',
 ];

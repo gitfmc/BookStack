@@ -1,5 +1,5 @@
 
-<div class="content-wrap mt-m card">
+<main class="content-wrap mt-m card">
 
     <div class="grid half v-center">
         <h1 class="list-heading">{{ trans('entities.shelves') }}</h1>
@@ -21,7 +21,7 @@
         @else
             <div class="grid third">
                 @foreach($shelves as $key => $shelf)
-                    @include('shelves.grid-item', ['shelf' => $shelf])
+                    @include('partials.entity-grid-item', ['entity' => $shelf])
                 @endforeach
             </div>
         @endif
@@ -31,8 +31,8 @@
     @else
         <p class="text-muted">{{ trans('entities.shelves_empty') }}</p>
         @if(userCan('bookshelf-create-all'))
-            <a href="{{ baseUrl("/create-shelf") }}" class="button outline">@icon('edit'){{ trans('entities.create_now') }}</a>
+            <a href="{{ url("/create-shelf") }}" class="button outline">@icon('edit'){{ trans('entities.create_now') }}</a>
         @endif
     @endif
 
-</div>
+</main>

@@ -1,32 +1,32 @@
 @extends('tri-layout')
 
 @section('container-attrs')
-    id="entity-dashboard"
-    entity-id="{{ $chapter->id }}"
-    entity-type="chapter"
+    component="entity-search"
+    option:entity-search:entity-id="{{ $chapter->id }}"
+    option:entity-search:entity-type="chapter"
 @stop
 
 @section('body')
 
-    <div class="mb-m">
+    <div class="mb-m print-hidden">
         @include('partials.breadcrumbs', ['crumbs' => [
             $chapter->book,
             $chapter,
         ]])
     </div>
 
-    <div class="content-wrap card">
-        <h1 class="break-text" v-pre>{{ $chapter->name }}</h1>
-        <div class="chapter-content" v-show="!searching">
-            <p v-pre class="text-muted break-text">{!! nl2br(e($chapter->description)) !!}</p>
+    <main class="content-wrap card">
+        <h1 class="break-text">{{ $chapter->name }}</h1>
+        <div refs="entity-search@contentView" class="chapter-content">
+            <p class="text-muted break-text">{!! nl2br(e($chapter->description)) !!}</p>
             @if(count($pages) > 0)
-                <div v-pre class="entity-list book-contents">
+                <div class="entity-list book-contents">
                     @foreach($pages as $page)
                         @include('pages.list-item', ['page' => $page])
                     @endforeach
                 </div>
             @else
-                <div class="mt-xl" v-pre>
+                <div class="mt-xl">
                     <hr>
                     <p class="text-muted italic mb-m mt-xl">{{ trans('entities.chapters_empty') }}</p>
 
@@ -49,8 +49,8 @@
             @endif
         </div>
 
-        @include('partials.entity-dashboard-search-results')
-    </div>
+        @include('partials.entity-search-results')
+    </main>
 
 @stop
 
@@ -123,24 +123,14 @@
 
             <hr class="primary-background"/>
 
-            <div dropdown class="dropdown-container">
-                <div dropdown-toggle class="icon-list-item">
-                    <span>@icon('export')</span>
-                    <span>{{ trans('entities.export') }}</span>
-                </div>
-                <ul class="wide dropdown-menu">
-                    <li><a href="{{ $chapter->getUrl('/export/html') }}" target="_blank">{{ trans('entities.export_html') }} <span class="text-muted float right">.html</span></a></li>
-                    <li><a href="{{ $chapter->getUrl('/export/pdf') }}" target="_blank">{{ trans('entities.export_pdf') }} <span class="text-muted float right">.pdf</span></a></li>
-                    <li><a href="{{ $chapter->getUrl('/export/plaintext') }}" target="_blank">{{ trans('entities.export_text') }} <span class="text-muted float right">.txt</span></a></li>
-                </ul>
-            </div>
+            @include('partials.entity-export-menu', ['entity' => $chapter])
         </div>
     </div>
 @stop
 
 @section('left')
 
-    @include('partials.entity-dashboard-search-box')
+    @include('partials.entity-search-form', ['label' => trans('entities.chapters_search_this')])
 
     @if($chapter->tags->count() > 0)
         <div class="mb-xl">

@@ -1,6 +1,6 @@
-<?php namespace Entity;
+<?php namespace Tests\Entity;
 
-use BookStack\Entities\Page;
+use BookStack\Entities\Models\Page;
 use BookStack\Entities\Repos\PageRepo;
 use Tests\TestCase;
 
@@ -12,7 +12,7 @@ class PageRevisionTest extends TestCase
 
         $pageRepo = app(PageRepo::class);
         $page = Page::first();
-        $pageRepo->updatePage($page, $page->book_id, ['name' => 'updated page', 'html' => '<p>new content</p>', 'summary' => 'page revision testing']);
+        $pageRepo->update($page, ['name' => 'updated page', 'html' => '<p>new content</p>', 'summary' => 'page revision testing']);
         $pageRevision = $page->revisions->last();
 
         $revisionView = $this->get($page->getUrl() . '/revisions/' . $pageRevision->id);
@@ -24,14 +24,29 @@ class PageRevisionTest extends TestCase
         $revisionView->assertSee('new content');
     }
 
+    public function test_page_revision_preview_shows_content_of_revision()
+    {
+        $this->asEditor();
+
+        $pageRepo = app(PageRepo::class);
+        $page = Page::first();
+        $pageRepo->update($page, ['name' => 'updated page', 'html' => '<p>new revision content</p>', 'summary' => 'page revision testing']);
+        $pageRevision = $page->revisions->last();
+        $pageRepo->update($page, ['name' => 'updated page', 'html' => '<p>Updated content</p>', 'summary' => 'page revision testing 2']);
+
+        $revisionView = $this->get($page->getUrl() . '/revisions/' . $pageRevision->id);
+        $revisionView->assertStatus(200);
+        $revisionView->assertSee('new revision content');
+    }
+
     public function test_page_revision_restore_updates_content()
     {
         $this->asEditor();
 
         $pageRepo = app(PageRepo::class);
         $page = Page::first();
-        $pageRepo->updatePage($page, $page->book_id, ['name' => 'updated page abc123', 'html' => '<p>new contente def456</p>', 'summary' => 'initial page revision testing']);
-        $pageRepo->updatePage($page, $page->book_id, ['name' => 'updated page again', 'html' => '<p>new content</p>', 'summary' => 'page revision testing']);
+        $pageRepo->update($page, ['name' => 'updated page abc123', 'html' => '<p>new contente def456</p>', 'summary' => 'initial page revision testing']);
+        $pageRepo->update($page, ['name' => 'updated page again', 'html' => '<p>new content</p>', 'summary' => 'page revision testing']);
         $page =  Page::find($page->id);
 
 
@@ -49,6 +64,58 @@ class PageRevisionTest extends TestCase
         $pageView = $this->get($page->getUrl());
         $pageView->assertSee('abc123');
         $pageView->assertSee('def456');
+    }
+
+    public function test_page_revision_restore_with_markdown_retains_markdown_content()
+    {
+        $this->asEditor();
+
+        $pageRepo = app(PageRepo::class);
+        $page = Page::first();
+        $pageRepo->update($page, ['name' => 'updated page abc123', 'markdown' => '## New Content def456', 'summary' => 'initial page revision testing']);
+        $pageRepo->update($page, ['name' => 'updated page again', 'markdown' => '## New Content Updated', 'summary' => 'page revision testing']);
+        $page = Page::find($page->id);
+
+        $pageView = $this->get($page->getUrl());
+        $pageView->assertDontSee('abc123');
+        $pageView->assertDontSee('def456');
+
+        $revToRestore = $page->revisions()->where('name', 'like', '%abc123')->first();
+        $restoreReq = $this->put($page->getUrl() . '/revisions/' . $revToRestore->id . '/restore');
+        $page = Page::find($page->id);
+
+        $restoreReq->assertStatus(302);
+        $restoreReq->assertRedirect($page->getUrl());
+
+        $pageView = $this->get($page->getUrl());
+        $this->assertDatabaseHas('pages', [
+            'id' => $page->id,
+            'markdown' => '## New Content def456',
+        ]);
+        $pageView->assertSee('abc123');
+        $pageView->assertSee('def456');
+    }
+
+    public function test_page_revision_restore_sets_new_revision_with_summary()
+    {
+        $this->asEditor();
+
+        $pageRepo = app(PageRepo::class);
+        $page = Page::first();
+        $pageRepo->update($page, ['name' => 'updated page abc123', 'html' => '<p>new contente def456</p>', 'summary' => 'My first update']);
+        $pageRepo->update($page, ['name' => 'updated page again', 'html' => '<p>new content</p>', 'summary' => '']);
+        $page->refresh();
+
+        $revToRestore = $page->revisions()->where('name', 'like', '%abc123')->first();
+        $this->put($page->getUrl() . '/revisions/' . $revToRestore->id . '/restore');
+        $page->refresh();
+
+        $this->assertDatabaseHas('page_revisions', [
+            'page_id' => $page->id,
+            'text' => 'new contente def456',
+            'type' => 'version',
+            'summary' => "Restored from #{$revToRestore->id}; My first update",
+        ]);
     }
 
     public function test_page_revision_count_increments_on_update()
@@ -87,7 +154,7 @@ class PageRevisionTest extends TestCase
         // Delete the first revision
         $revision = $page->revisions->get(1);
         $resp = $this->asEditor()->delete($revision->getUrl('/delete/'));
-        $resp->assertStatus(200);
+        $resp->assertRedirect($page->getUrl('/revisions'));
 
         $page = Page::find($page->id);
         $afterRevisionCount = $page->revisions->count();
@@ -98,7 +165,7 @@ class PageRevisionTest extends TestCase
         $beforeRevisionCount = $page->revisions->count();
         $currentRevision = $page->getCurrentRevision();
         $resp = $this->asEditor()->delete($currentRevision->getUrl('/delete/'));
-        $resp->assertStatus(400);
+        $resp->assertRedirect($page->getUrl('/revisions'));
 
         $page = Page::find($page->id);
         $afterRevisionCount = $page->revisions->count();

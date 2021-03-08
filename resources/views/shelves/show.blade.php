@@ -8,16 +8,24 @@
         ]])
     </div>
 
-    <div class="card content-wrap">
+    <main class="card content-wrap">
         <h1 class="break-text">{{$shelf->name}}</h1>
         <div class="book-content">
             <p class="text-muted">{!! nl2br(e($shelf->description)) !!}</p>
-            @if(count($books) > 0)
-                <div class="entity-list">
-                    @foreach($books as $book)
-                        @include('books.list-item', ['book' => $book])
-                    @endforeach
-                </div>
+            @if(count($shelf->visibleBooks) > 0)
+                @if($view === 'list')
+                    <div class="entity-list">
+                        @foreach($shelf->visibleBooks as $book)
+                            @include('books.list-item', ['book' => $book])
+                        @endforeach
+                    </div>
+                @else
+                    <div class="grid third">
+                        @foreach($shelf->visibleBooks as $key => $book)
+                            @include('partials.entity-grid-item', ['entity' => $book])
+                        @endforeach
+                    </div>
+                @endif
             @else
                 <div class="mt-xl">
                     <hr>
@@ -39,7 +47,7 @@
                 </div>
             @endif
         </div>
-    </div>
+    </main>
 
 @stop
 
@@ -86,6 +94,8 @@
                     <span>{{ trans('entities.books_new_action') }}</span>
                 </a>
             @endif
+
+            @include('partials.view-toggle', ['view' => $view, 'type' => 'shelf'])
 
             <hr class="primary-background">
 

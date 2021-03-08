@@ -1,38 +1,36 @@
 <?php namespace BookStack\Http\Controllers;
 
+use BookStack\Actions\ActivityType;
 use BookStack\Auth\Access\SocialAuthService;
+use BookStack\Auth\Access\UserInviteService;
 use BookStack\Auth\User;
 use BookStack\Auth\UserRepo;
 use BookStack\Exceptions\UserUpdateException;
 use BookStack\Uploads\ImageRepo;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
 
     protected $user;
     protected $userRepo;
+    protected $inviteService;
     protected $imageRepo;
 
     /**
      * UserController constructor.
-     * @param User $user
-     * @param UserRepo $userRepo
-     * @param ImageRepo $imageRepo
      */
-    public function __construct(User $user, UserRepo $userRepo, ImageRepo $imageRepo)
+    public function __construct(User $user, UserRepo $userRepo, UserInviteService $inviteService, ImageRepo $imageRepo)
     {
         $this->user = $user;
         $this->userRepo = $userRepo;
+        $this->inviteService = $inviteService;
         $this->imageRepo = $imageRepo;
-        parent::__construct();
     }
 
     /**
      * Display a listing of the users.
-     * @param Request $request
-     * @return Response
      */
     public function index(Request $request)
     {
@@ -43,6 +41,7 @@ class UserController extends Controller
             'sort' => $request->get('sort', 'name'),
         ];
         $users = $this->userRepo->getAllUsersPaginatedAndSorted(20, $listDetails);
+
         $this->setPageTitle(trans('settings.users'));
         $users->appends($listDetails);
         return view('users.index', ['users' => $users, 'listDetails' => $listDetails]);
@@ -50,7 +49,6 @@ class UserController extends Controller
 
     /**
      * Show the form for creating a new user.
-     * @return Response
      */
     public function create()
     {
@@ -62,23 +60,24 @@ class UserController extends Controller
 
     /**
      * Store a newly created user in storage.
-     * @param  Request $request
-     * @return Response
      * @throws UserUpdateException
+     * @throws \Illuminate\Validation\ValidationException
      */
     public function store(Request $request)
     {
         $this->checkPermission('users-manage');
         $validationRules = [
-            'name'             => 'required',
-            'email'            => 'required|email|unique:users,email'
+            'name'  => 'required',
+            'email' => 'required|email|unique:users,email'
         ];
 
         $authMethod = config('auth.method');
-        if ($authMethod === 'standard') {
-            $validationRules['password'] = 'required|min:5';
+        $sendInvite = ($request->get('send_invite', 'false') === 'true');
+
+        if ($authMethod === 'standard' && !$sendInvite) {
+            $validationRules['password'] = 'required|min:6';
             $validationRules['password-confirm'] = 'required|same:password';
-        } elseif ($authMethod === 'ldap') {
+        } elseif ($authMethod === 'ldap' || $authMethod === 'saml2') {
             $validationRules['external_auth_id'] = 'required';
         }
         $this->validate($request, $validationRules);
@@ -86,12 +85,16 @@ class UserController extends Controller
         $user = $this->user->fill($request->all());
 
         if ($authMethod === 'standard') {
-            $user->password = bcrypt($request->get('password'));
-        } elseif ($authMethod === 'ldap') {
+            $user->password = bcrypt($request->get('password', Str::random(32)));
+        } elseif ($authMethod === 'ldap' || $authMethod === 'saml2') {
             $user->external_auth_id = $request->get('external_auth_id');
         }
 
         $user->save();
+
+        if ($sendInvite) {
+            $this->inviteService->sendInvitation($user);
+        }
 
         if ($request->filled('roles')) {
             $roles = $request->get('roles');
@@ -100,53 +103,59 @@ class UserController extends Controller
 
         $this->userRepo->downloadAndAssignUserAvatar($user);
 
+        $this->logActivity(ActivityType::USER_CREATE, $user);
         return redirect('/settings/users');
     }
 
     /**
      * Show the form for editing the specified user.
-     * @param  int              $id
-     * @param \BookStack\Auth\Access\SocialAuthService $socialAuthService
-     * @return Response
      */
-    public function edit($id, SocialAuthService $socialAuthService)
+    public function edit(int $id, SocialAuthService $socialAuthService)
     {
         $this->checkPermissionOrCurrentUser('users-manage', $id);
 
-        $user = $this->user->findOrFail($id);
+        $user = $this->user->newQuery()->with(['apiTokens'])->findOrFail($id);
 
         $authMethod = ($user->system_name) ? 'system' : config('auth.method');
 
         $activeSocialDrivers = $socialAuthService->getActiveDrivers();
         $this->setPageTitle(trans('settings.user_profile'));
         $roles = $this->userRepo->getAllRoles();
-        return view('users.edit', ['user' => $user, 'activeSocialDrivers' => $activeSocialDrivers, 'authMethod' => $authMethod, 'roles' => $roles]);
+        return view('users.edit', [
+            'user' => $user,
+            'activeSocialDrivers' => $activeSocialDrivers,
+            'authMethod' => $authMethod,
+            'roles' => $roles
+        ]);
     }
 
     /**
      * Update the specified user in storage.
-     * @param Request $request
-     * @param int $id
-     * @return Response
      * @throws UserUpdateException
      * @throws \BookStack\Exceptions\ImageUploadException
+     * @throws \Illuminate\Validation\ValidationException
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, int $id)
     {
-        $this->preventAccessForDemoUsers();
+        $this->preventAccessInDemoMode();
         $this->checkPermissionOrCurrentUser('users-manage', $id);
 
         $this->validate($request, [
             'name'             => 'min:2',
             'email'            => 'min:2|email|unique:users,email,' . $id,
-            'password'         => 'min:5|required_with:password_confirm',
+            'password'         => 'min:6|required_with:password_confirm',
             'password-confirm' => 'same:password|required_with:password',
             'setting'          => 'array',
-            'profile_image'    => $this->imageRepo->getImageValidationRules(),
+            'profile_image'    => 'nullable|' . $this->getImageValidationRules(),
         ]);
 
         $user = $this->userRepo->getById($id);
-        $user->fill($request->all());
+        $user->fill($request->except(['email']));
+
+        // Email updates
+        if (userCan('users-manage') && $request->filled('email')) {
+            $user->email = $request->get('email');
+        }
 
         // Role updates
         if (userCan('users-manage') && $request->filled('roles')) {
@@ -161,7 +170,7 @@ class UserController extends Controller
         }
 
         // External auth id updates
-        if ($this->currentUser->can('users-manage') && $request->filled('external_auth_id')) {
+        if (user()->can('users-manage') && $request->filled('external_auth_id')) {
             $user->external_auth_id = $request->get('external_auth_id');
         }
 
@@ -173,20 +182,21 @@ class UserController extends Controller
         }
 
         // Save profile image if in request
-        if ($request->has('profile_image')) {
+        if ($request->hasFile('profile_image')) {
             $imageUpload = $request->file('profile_image');
             $this->imageRepo->destroyImage($user->avatar);
             $image = $this->imageRepo->saveNew($imageUpload, 'user', $user->id);
             $user->image_id = $image->id;
         }
 
-        // Delete the profile image if set to
+        // Delete the profile image if reset option is in request
         if ($request->has('profile_image_reset')) {
             $this->imageRepo->destroyImage($user->avatar);
         }
 
         $user->save();
-        session()->flash('success', trans('settings.users_edit_success'));
+        $this->showSuccessNotification(trans('settings.users_edit_success'));
+        $this->logActivity(ActivityType::USER_UPDATE, $user);
 
         $redirectUrl = userCan('users-manage') ? '/settings/users' : ('/settings/users/' . $user->id);
         return redirect($redirectUrl);
@@ -194,10 +204,8 @@ class UserController extends Controller
 
     /**
      * Show the user delete page.
-     * @param int $id
-     * @return \Illuminate\View\View
      */
-    public function delete($id)
+    public function delete(int $id)
     {
         $this->checkPermissionOrCurrentUser('users-manage', $id);
 
@@ -208,44 +216,42 @@ class UserController extends Controller
 
     /**
      * Remove the specified user from storage.
-     * @param  int $id
-     * @return Response
      * @throws \Exception
      */
-    public function destroy($id)
+    public function destroy(Request $request, int $id)
     {
-        $this->preventAccessForDemoUsers();
+        $this->preventAccessInDemoMode();
         $this->checkPermissionOrCurrentUser('users-manage', $id);
 
         $user = $this->userRepo->getById($id);
+        $newOwnerId = $request->get('new_owner_id', null);
 
         if ($this->userRepo->isOnlyAdmin($user)) {
-            session()->flash('error', trans('errors.users_cannot_delete_only_admin'));
+            $this->showErrorNotification(trans('errors.users_cannot_delete_only_admin'));
             return redirect($user->getEditUrl());
         }
 
         if ($user->system_name === 'public') {
-            session()->flash('error', trans('errors.users_cannot_delete_guest'));
+            $this->showErrorNotification(trans('errors.users_cannot_delete_guest'));
             return redirect($user->getEditUrl());
         }
 
-        $this->userRepo->destroy($user);
-        session()->flash('success', trans('settings.users_delete_success'));
+        $this->userRepo->destroy($user, $newOwnerId);
+        $this->showSuccessNotification(trans('settings.users_delete_success'));
+        $this->logActivity(ActivityType::USER_DELETE, $user);
 
         return redirect('/settings/users');
     }
 
     /**
      * Show the user profile page
-     * @param $id
-     * @return \Illuminate\Contracts\View\Factory|\Illuminate\View\View
      */
     public function showProfilePage($id)
     {
         $user = $this->userRepo->getById($id);
 
         $userActivity = $this->userRepo->getActivity($user);
-        $recentlyCreated = $this->userRepo->getRecentlyCreated($user, 5, 0);
+        $recentlyCreated = $this->userRepo->getRecentlyCreated($user, 5);
         $assetCounts = $this->userRepo->getAssetCounts($user);
 
         return view('users.profile', [
@@ -258,34 +264,32 @@ class UserController extends Controller
 
     /**
      * Update the user's preferred book-list display setting.
-     * @param $id
-     * @param Request $request
-     * @return \Illuminate\Http\RedirectResponse
      */
-    public function switchBookView($id, Request $request)
+    public function switchBooksView(Request $request, int $id)
     {
         return $this->switchViewType($id, $request, 'books');
     }
 
     /**
      * Update the user's preferred shelf-list display setting.
-     * @param $id
-     * @param Request $request
-     * @return \Illuminate\Http\RedirectResponse
      */
-    public function switchShelfView($id, Request $request)
+    public function switchShelvesView(Request $request, int $id)
     {
         return $this->switchViewType($id, $request, 'bookshelves');
     }
 
     /**
-     * For a type of list, switch with stored view type for a user.
-     * @param integer $userId
-     * @param Request $request
-     * @param string $listName
-     * @return \Illuminate\Http\RedirectResponse
+     * Update the user's preferred shelf-view book list display setting.
      */
-    protected function switchViewType($userId, Request $request, string $listName)
+    public function switchShelfView(Request $request, int $id)
+    {
+        return $this->switchViewType($id, $request, 'bookshelf');
+    }
+
+    /**
+     * For a type of list, switch with stored view type for a user.
+     */
+    protected function switchViewType(int $userId, Request $request, string $listName)
     {
         $this->checkPermissionOrCurrentUser('users-manage', $userId);
 
@@ -303,12 +307,8 @@ class UserController extends Controller
 
     /**
      * Change the stored sort type for a particular view.
-     * @param string $id
-     * @param string $type
-     * @param Request $request
-     * @return \Illuminate\Http\RedirectResponse
      */
-    public function changeSort(string $id, string $type, Request $request)
+    public function changeSort(Request $request, string $id, string $type)
     {
         $validSortTypes = ['books', 'bookshelves'];
         if (!in_array($type, $validSortTypes)) {
@@ -318,13 +318,19 @@ class UserController extends Controller
     }
 
     /**
-     * Update the stored section expansion preference for the given user.
-     * @param string $id
-     * @param string $key
-     * @param Request $request
-     * @return \Illuminate\Contracts\Routing\ResponseFactory|\Symfony\Component\HttpFoundation\Response
+     * Toggle dark mode for the current user.
      */
-    public function updateExpansionPreference(string $id, string $key, Request $request)
+    public function toggleDarkMode()
+    {
+        $enabled = setting()->getForCurrentUser('dark-mode-enabled', false);
+        setting()->putUser(user(), 'dark-mode-enabled', $enabled ? 'false' : 'true');
+        return redirect()->back();
+    }
+
+    /**
+     * Update the stored section expansion preference for the given user.
+     */
+    public function updateExpansionPreference(Request $request, string $id, string $key)
     {
         $this->checkPermissionOrCurrentUser('users-manage', $id);
         $keyWhitelist = ['home-details'];
@@ -341,10 +347,6 @@ class UserController extends Controller
 
     /**
      * Changed the stored preference for a list sort order.
-     * @param int $userId
-     * @param Request $request
-     * @param string $listName
-     * @return \Illuminate\Http\RedirectResponse
      */
     protected function changeListSort(int $userId, Request $request, string $listName)
     {

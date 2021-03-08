@@ -1,7 +1,5 @@
 @extends('tri-layout')
 
-@section('container-classes', 'mt-xl')
-
 @section('body')
     @include('books.list', ['books' => $books, 'view' => $view])
 @stop
@@ -38,14 +36,14 @@
     <div class="actions mb-xl">
         <h5>{{ trans('common.actions') }}</h5>
         <div class="icon-list text-primary">
-            @if($currentUser->can('book-create-all'))
-                <a href="{{ baseUrl("/create-book") }}" class="icon-list-item">
+            @if(user()->can('book-create-all'))
+                <a href="{{ url("/create-book") }}" class="icon-list-item">
                     <span>@icon('add')</span>
                     <span>{{ trans('entities.books_create') }}</span>
                 </a>
             @endif
 
-            @include('partials.view-toggle', ['view' => $view, 'type' => 'book'])
+            @include('partials.view-toggle', ['view' => $view, 'type' => 'books'])
         </div>
     </div>
 

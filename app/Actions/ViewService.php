@@ -1,8 +1,10 @@
 <?php namespace BookStack\Actions;
 
 use BookStack\Auth\Permissions\PermissionService;
-use BookStack\Entities\Entity;
+use BookStack\Entities\Models\Book;
+use BookStack\Entities\Models\Entity;
 use BookStack\Entities\EntityProvider;
+use DB;
 use Illuminate\Support\Collection;
 
 class ViewService
@@ -13,8 +15,8 @@ class ViewService
 
     /**
      * ViewService constructor.
-     * @param \BookStack\Actions\View $view
-     * @param \BookStack\Auth\Permissions\PermissionService $permissionService
+     * @param View $view
+     * @param PermissionService $permissionService
      * @param EntityProvider $entityProvider
      */
     public function __construct(View $view, PermissionService $permissionService, EntityProvider $entityProvider)
@@ -26,7 +28,7 @@ class ViewService
 
     /**
      * Add a view to the given entity.
-     * @param Entity $entity
+     * @param \BookStack\Entities\Models\Entity $entity
      * @return int
      */
     public function add(Entity $entity)
@@ -43,7 +45,7 @@ class ViewService
         }
 
         // Otherwise create new view count
-        $entity->views()->save($this->view->create([
+        $entity->views()->save($this->view->newInstance([
             'user_id' => $user->id,
             'views' => 1
         ]));
@@ -59,12 +61,12 @@ class ViewService
      * @param string $action - used for permission checking
      * @return Collection
      */
-    public function getPopular(int $count = 10, int $page = 0, $filterModels = null, string $action = 'view')
+    public function getPopular(int $count = 10, int $page = 0, array $filterModels = null, string $action = 'view')
     {
         $skipCount = $count * $page;
         $query = $this->permissionService
             ->filterRestrictedEntityRelations($this->view, 'views', 'viewable_id', 'viewable_type', $action)
-            ->select('*', 'viewable_id', 'viewable_type', \DB::raw('SUM(views) as view_count'))
+            ->select('*', 'viewable_id', 'viewable_type', DB::raw('SUM(views) as view_count'))
             ->groupBy('viewable_id', 'viewable_type')
             ->orderBy('view_count', 'desc');
 
@@ -72,34 +74,36 @@ class ViewService
             $query->whereIn('viewable_type', $this->entityProvider->getMorphClasses($filterModels));
         }
 
-        return $query->with('viewable')->skip($skipCount)->take($count)->get()->pluck('viewable');
+        return $query->with('viewable')
+            ->skip($skipCount)
+            ->take($count)
+            ->get()
+            ->pluck('viewable')
+            ->filter();
     }
 
     /**
      * Get all recently viewed entities for the current user.
-     * @param int $count
-     * @param int $page
-     * @param Entity|bool $filterModel
-     * @return mixed
      */
-    public function getUserRecentlyViewed($count = 10, $page = 0, $filterModel = false)
+    public function getUserRecentlyViewed(int $count = 10, int $page = 1)
     {
         $user = user();
         if ($user === null || $user->isDefault()) {
             return collect();
         }
 
-        $query = $this->permissionService
-            ->filterRestrictedEntityRelations($this->view, 'views', 'viewable_id', 'viewable_type');
-
-        if ($filterModel) {
-            $query = $query->where('viewable_type', '=', $filterModel->getMorphClass());
+        $all = collect();
+        /** @var Entity $instance */
+        foreach ($this->entityProvider->all() as $name => $instance) {
+            $items = $instance::visible()->withLastView()
+                ->orderBy('last_viewed_at', 'desc')
+                ->skip($count * ($page - 1))
+                ->take($count)
+                ->get();
+            $all = $all->concat($items);
         }
-        $query = $query->where('user_id', '=', $user->id);
 
-        $viewables = $query->with('viewable')->orderBy('updated_at', 'desc')
-            ->skip($count * $page)->take($count)->get()->pluck('viewable');
-        return $viewables;
+        return $all->sortByDesc('last_viewed_at')->slice(0, $count);
     }
 
     /**

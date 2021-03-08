@@ -1,13 +1,16 @@
 
-<div class="active-link-list">
-    @if($currentUser->can('settings-manage'))
-        <a href="{{ baseUrl('/settings') }}" @if($selected == 'settings') class="active" @endif>@icon('settings'){{ trans('settings.settings') }}</a>
-        <a href="{{ baseUrl('/settings/maintenance') }}" @if($selected == 'maintenance') class="active" @endif>@icon('spanner'){{ trans('settings.maint') }}</a>
+<nav class="active-link-list">
+    @if(userCan('settings-manage'))
+        <a href="{{ url('/settings') }}" @if($selected == 'settings') class="active" @endif>@icon('settings'){{ trans('settings.settings') }}</a>
+        <a href="{{ url('/settings/maintenance') }}" @if($selected == 'maintenance') class="active" @endif>@icon('spanner'){{ trans('settings.maint') }}</a>
     @endif
-    @if($currentUser->can('users-manage'))
-        <a href="{{ baseUrl('/settings/users') }}" @if($selected == 'users') class="active" @endif>@icon('users'){{ trans('settings.users') }}</a>
+    @if(userCan('settings-manage') && userCan('users-manage'))
+        <a href="{{ url('/settings/audit') }}" @if($selected == 'audit') class="active" @endif>@icon('open-book'){{ trans('settings.audit') }}</a>
     @endif
-    @if($currentUser->can('user-roles-manage'))
-        <a href="{{ baseUrl('/settings/roles') }}" @if($selected == 'roles') class="active" @endif>@icon('lock-open'){{ trans('settings.roles') }}</a>
+    @if(userCan('users-manage'))
+        <a href="{{ url('/settings/users') }}" @if($selected == 'users') class="active" @endif>@icon('users'){{ trans('settings.users') }}</a>
     @endif
-</div>
+    @if(userCan('user-roles-manage'))
+        <a href="{{ url('/settings/roles') }}" @if($selected == 'roles') class="active" @endif>@icon('lock-open'){{ trans('settings.roles') }}</a>
+    @endif
+</nav>

@@ -20,7 +20,7 @@ return [
     'role' => 'Rol',
     'cover_image' => 'Imagen de portada',
     'cover_image_description' => 'Esta imagen debe ser aproximadamente de 440x250px.',
-
+    
     // Actions
     'actions' => 'Acciones',
     'view' => 'Ver',
@@ -33,13 +33,19 @@ return [
     'copy' => 'Copiar',
     'reply' => 'Responder',
     'delete' => 'Borrar',
+    'delete_confirm' => 'Confirmar borrado',
     'search' => 'Buscar',
     'search_clear' => 'Limpiar búsqueda',
     'reset' => 'Resetear',
     'remove' => 'Remover',
     'add' => 'Añadir',
+    'fullscreen' => 'Pantalla completa',
 
     // Sort Options
+    'sort_options' => 'Opciones de ordenación',
+    'sort_direction_toggle' => 'Cambiar el Orden',
+    'sort_ascending' => 'Ordenar Ascendentemente',
+    'sort_descending' => 'Ordenar Descendentemente',
     'sort_name' => 'Nombre',
     'sort_created_at' => 'Fecha de Creación',
     'sort_updated_at' => 'Fecha de Modificación',
@@ -55,10 +61,14 @@ return [
     'grid_view' => 'Vista en Cuadrícula',
     'list_view' => 'Vista en Lista',
     'default' => 'Predeterminada',
+    'breadcrumb' => 'Rastro de migas de pan',
 
     // Header
+    'profile_menu' => 'Menú de Perfil',
     'view_profile' => 'Ver Perfil',
     'edit_profile' => 'Editar Perfil',
+    'dark_mode' => 'Modo Oscuro',
+    'light_mode' => 'Modo Claro',
 
     // Layout tabs
     'tab_info' => 'Información',
@@ -67,4 +77,9 @@ return [
     // Email Content
     'email_action_help' => 'Si está teniendo problemas clicando en el botón ":actionText", copie y pegue la siguiente URL en su navegador web:',
     'email_rights' => 'Todos los derechos reservados',
+
+    // Footer Link Options
+    // Not directly used but available for convenience to users.
+    'privacy_policy' => 'Política de privacidad',
+    'terms_of_service' => 'Términos de Servicio',
 ];

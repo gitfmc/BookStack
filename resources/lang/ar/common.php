@@ -1,31 +1,30 @@
 <?php
+/**
+ * Common elements found throughout many areas of BookStack.
+ */
 return [
 
-    /**
-     * Buttons
-     */
+    // Buttons
     'cancel' => 'إلغاء',
     'confirm' => 'تأكيد',
     'back' => 'رجوع',
     'save' => 'حفظ',
     'continue' => 'استمرار',
     'select' => 'تحديد',
+    'toggle_all' => 'تبديل الكل',
     'more' => 'المزيد',
 
-    /**
-     * Form Labels
-     */
+    // Form Labels
     'name' => 'الاسم',
     'description' => 'الوصف',
     'role' => 'الدور',
     'cover_image' => 'صورة الغلاف',
     'cover_image_description' => 'الصورة يجب أن تكون مقاربة لحجم 440×250 بكسل.',
     
-    /**
-     * Actions
-     */
+    // Actions
     'actions' => 'إجراءات',
     'view' => 'عرض',
+    'view_all' => 'عرض الكل',
     'create' => 'إنشاء',
     'update' => 'تحديث',
     'edit' => 'تعديل',
@@ -34,15 +33,24 @@ return [
     'copy' => 'نسخ',
     'reply' => 'رد',
     'delete' => 'حذف',
+    'delete_confirm' => 'تأكيد الحذف',
     'search' => 'بحث',
     'search_clear' => 'مسح البحث',
     'reset' => 'إعادة تعيين',
     'remove' => 'إزالة',
     'add' => 'إضافة',
+    'fullscreen' => 'شاشة كاملة',
 
-    /**
-     * Misc
-     */
+    // Sort Options
+    'sort_options' => 'خيارات الترتيب',
+    'sort_direction_toggle' => 'الترتيب وفق الإتجاه',
+    'sort_ascending' => 'فرز تصاعدي',
+    'sort_descending' => 'فرز تنازلي',
+    'sort_name' => 'الاسم',
+    'sort_created_at' => 'تاريخ الإنشاء',
+    'sort_updated_at' => 'تاريخ التحديث',
+
+    // Misc
     'deleted_user' => 'حذف مستخدم',
     'no_activity' => 'لا يوجد نشاط لعرضه',
     'no_items' => 'لا توجد عناصر متوفرة',
@@ -52,16 +60,26 @@ return [
     'details' => 'التفاصيل',
     'grid_view' => 'عرض شبكي',
     'list_view' => 'عرض منسدل',
+    'default' => 'افتراضي',
+    'breadcrumb' => 'شريط التنقل',
 
-    /**
-     * Header
-     */
+    // Header
+    'profile_menu' => 'قائمة ملف التعريف',
     'view_profile' => 'عرض الملف الشخصي',
     'edit_profile' => 'تعديل الملف الشخصي',
+    'dark_mode' => 'الوضع المظلم',
+    'light_mode' => 'الوضع المضيء',
 
-    /**
-     * Email Content
-     */
+    // Layout tabs
+    'tab_info' => 'معلومات',
+    'tab_content' => 'المحتوى',
+
+    // Email Content
     'email_action_help' => 'إذا واجهتكم مشكلة بضغط زر ":actionText" فبإمكانكم نسخ الرابط أدناه ولصقه بالمتصفح:',
     'email_rights' => 'جميع الحقوق محفوظة',
+
+    // Footer Link Options
+    // Not directly used but available for convenience to users.
+    'privacy_policy' => 'Privacy Policy',
+    'terms_of_service' => 'Terms of Service',
 ];

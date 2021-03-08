@@ -1,12 +1,13 @@
-<?php namespace Tests;
+<?php namespace Tests\Entity;
 
-use BookStack\Entities\Book;
-use BookStack\Entities\Chapter;
-use BookStack\Entities\Page;
-use BookStack\Entities\Repos\EntityRepo;
+use BookStack\Entities\Models\Bookshelf;
+use BookStack\Entities\Models\Book;
+use BookStack\Entities\Models\Chapter;
+use BookStack\Entities\Models\Page;
 use BookStack\Auth\UserRepo;
 use BookStack\Entities\Repos\PageRepo;
 use Carbon\Carbon;
+use Tests\BrowserKitTest;
 
 class EntityTest extends BrowserKitTest
 {
@@ -16,27 +17,10 @@ class EntityTest extends BrowserKitTest
         // Test Creation
         $book = $this->bookCreation();
         $chapter = $this->chapterCreation($book);
-        $page = $this->pageCreation($chapter);
+        $this->pageCreation($chapter);
 
         // Test Updating
-        $book = $this->bookUpdate($book);
-
-        // Test Deletion
-        $this->bookDelete($book);
-    }
-
-    public function bookDelete(Book $book)
-    {
-        $this->asAdmin()
-            ->visit($book->getUrl())
-            // Check link works correctly
-            ->click('Delete')
-            ->seePageIs($book->getUrl() . '/delete')
-            // Ensure the book name is show to user
-            ->see($book->name)
-            ->press('Confirm')
-            ->seePageIs('/books')
-            ->notSeeInDatabase('books', ['id' => $book->id]);
+        $this->bookUpdate($book);
     }
 
     public function bookUpdate(Book $book)
@@ -192,7 +176,7 @@ class EntityTest extends BrowserKitTest
         $entities = $this->createEntityChainBelongingToUser($creator, $updater);
         $this->actingAs($creator);
         app(UserRepo::class)->destroy($creator);
-        app(PageRepo::class)->savePageRevision($entities['page']);
+        app(PageRepo::class)->update($entities['page'], ['html' => '<p>hello!</p>>']);
 
         $this->checkEntitiesViewable($entities);
     }
@@ -205,7 +189,7 @@ class EntityTest extends BrowserKitTest
         $entities = $this->createEntityChainBelongingToUser($creator, $updater);
         $this->actingAs($updater);
         app(UserRepo::class)->destroy($updater);
-        app(PageRepo::class)->savePageRevision($entities['page']);
+        app(PageRepo::class)->update($entities['page'], ['html' => '<p>Hello there!</p>']);
 
         $this->checkEntitiesViewable($entities);
     }
@@ -271,25 +255,63 @@ class EntityTest extends BrowserKitTest
             ->seeInElement('#recently-updated-pages', $page->name);
     }
 
-    public function test_slug_multi_byte_lower_casing()
+    public function test_slug_multi_byte_url_safe()
     {
-        $entityRepo = app(EntityRepo::class);
-        $book = $entityRepo->createFromInput('book', [
-            'name' => 'КНИГА'
+        $book = $this->newBook([
+            'name' => 'информация'
         ]);
 
-        $this->assertEquals('книга', $book->slug);
-    }
+        $this->assertEquals('informatsiya', $book->slug);
 
+        $book = $this->newBook([
+            'name' => '¿Qué?'
+        ]);
+
+        $this->assertEquals('que', $book->slug);
+    }
 
     public function test_slug_format()
     {
-        $entityRepo = app(EntityRepo::class);
-        $book = $entityRepo->createFromInput('book', [
+        $book = $this->newBook([
             'name' => 'PartA / PartB / PartC'
         ]);
 
         $this->assertEquals('parta-partb-partc', $book->slug);
+    }
+
+    public function test_shelf_cancel_creation_returns_to_correct_place()
+    {
+        $shelf = Bookshelf::first();
+
+        // Cancel button from shelf goes back to shelf
+        $this->asEditor()->visit($shelf->getUrl('/create-book'))
+            ->see('Cancel')
+            ->click('Cancel')
+            ->seePageIs($shelf->getUrl());
+
+        // Cancel button from books goes back to books
+        $this->asEditor()->visit('/create-book')
+            ->see('Cancel')
+            ->click('Cancel')
+            ->seePageIs('/books');
+
+        // Cancel button from book edit goes back to book
+        $book = Book::first();
+
+        $this->asEditor()->visit($book->getUrl('/edit'))
+            ->see('Cancel')
+            ->click('Cancel')
+            ->seePageIs($book->getUrl());
+    }
+
+    public function test_page_within_chapter_deletion_returns_to_chapter()
+    {
+        $chapter = Chapter::query()->first();
+        $page = $chapter->pages()->first();
+
+        $this->asEditor()->visit($page->getUrl('/delete'))
+            ->submitForm('Confirm')
+            ->seePageIs($chapter->getUrl());
     }
 
 }

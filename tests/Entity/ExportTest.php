@@ -1,8 +1,10 @@
-<?php namespace Tests;
+<?php namespace Tests\Entity;
 
-
-use BookStack\Entities\Chapter;
-use BookStack\Entities\Page;
+use BookStack\Entities\Models\Chapter;
+use BookStack\Entities\Models\Page;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Tests\TestCase;
 
 class ExportTest extends TestCase
 {
@@ -76,6 +78,20 @@ class ExportTest extends TestCase
         $resp->assertHeader('Content-Disposition', 'attachment; filename="' . $book->slug . '.html"');
     }
 
+    public function test_book_html_export_shows_chapter_descriptions()
+    {
+        $chapterDesc = 'My custom test chapter description ' . Str::random(12);
+        $chapter = Chapter::query()->first();
+        $chapter->description = $chapterDesc;
+        $chapter->save();
+
+        $book = $chapter->book;
+        $this->asEditor();
+
+        $resp = $this->get($book->getUrl('/export/html'));
+        $resp->assertSee($chapterDesc);
+    }
+
     public function test_chapter_text_export()
     {
         $chapter = Chapter::first();
@@ -132,6 +148,70 @@ class ExportTest extends TestCase
         $resp->assertDontSee($page->created_at->diffForHumans());
         $resp->assertSee($page->updated_at->toDayDateTimeString());
         $resp->assertDontSee($page->updated_at->diffForHumans());
+    }
+
+    public function test_page_export_does_not_include_user_or_revision_links()
+    {
+        $page = Page::first();
+
+        $resp = $this->asEditor()->get($page->getUrl('/export/html'));
+        $resp->assertDontSee($page->getUrl('/revisions'));
+        $resp->assertDontSee($page->createdBy->getProfileUrl());
+        $resp->assertSee($page->createdBy->name);
+    }
+
+    public function test_page_export_sets_right_data_type_for_svg_embeds()
+    {
+        $page = Page::first();
+        Storage::disk('local')->makeDirectory('uploads/images/gallery');
+        Storage::disk('local')->put('uploads/images/gallery/svg_test.svg', '<svg></svg>');
+        $page->html = '<img src="http://localhost/uploads/images/gallery/svg_test.svg">';
+        $page->save();
+
+        $this->asEditor();
+        $resp = $this->get($page->getUrl('/export/html'));
+        Storage::disk('local')->delete('uploads/images/gallery/svg_test.svg');
+
+        $resp->assertStatus(200);
+        $resp->assertSee('<img src="data:image/svg+xml;base64');
+    }
+
+    public function test_page_image_containment_works_on_multiple_images_within_a_single_line()
+    {
+        $page = Page::first();
+        Storage::disk('local')->makeDirectory('uploads/images/gallery');
+        Storage::disk('local')->put('uploads/images/gallery/svg_test.svg', '<svg></svg>');
+        Storage::disk('local')->put('uploads/images/gallery/svg_test2.svg', '<svg></svg>');
+        $page->html = '<img src="http://localhost/uploads/images/gallery/svg_test.svg" class="a"><img src="http://localhost/uploads/images/gallery/svg_test2.svg" class="b">';
+        $page->save();
+
+        $resp = $this->asEditor()->get($page->getUrl('/export/html'));
+        Storage::disk('local')->delete('uploads/images/gallery/svg_test.svg');
+        Storage::disk('local')->delete('uploads/images/gallery/svg_test2.svg');
+
+        $resp->assertDontSee('http://localhost/uploads/images/gallery/svg_test');
+    }
+
+    public function test_page_export_contained_html_image_fetches_only_run_when_url_points_to_image_upload_folder()
+    {
+        $page = Page::first();
+        $page->html = '<img src="http://localhost/uploads/images/gallery/svg_test.svg"/>'
+            .'<img src="http://localhost/uploads/svg_test.svg"/>'
+            .'<img src="/uploads/svg_test.svg"/>';
+        $storageDisk = Storage::disk('local');
+        $storageDisk->makeDirectory('uploads/images/gallery');
+        $storageDisk->put('uploads/images/gallery/svg_test.svg', '<svg>good</svg>');
+        $storageDisk->put('uploads/svg_test.svg', '<svg>bad</svg>');
+        $page->save();
+
+        $resp = $this->asEditor()->get($page->getUrl('/export/html'));
+
+        $storageDisk->delete('uploads/images/gallery/svg_test.svg');
+        $storageDisk->delete('uploads/svg_test.svg');
+
+        $resp->assertDontSee('http://localhost/uploads/images/gallery/svg_test.svg');
+        $resp->assertSee('http://localhost/uploads/svg_test.svg');
+        $resp->assertSee('src="/uploads/svg_test.svg"');
     }
 
 }

@@ -1,19 +1,19 @@
 <?php namespace BookStack\Providers;
 
 use Blade;
-use BookStack\Entities\Book;
-use BookStack\Entities\Bookshelf;
+use BookStack\Entities\Models\Book;
+use BookStack\Entities\Models\Bookshelf;
 use BookStack\Entities\BreadcrumbsViewComposer;
-use BookStack\Entities\Chapter;
-use BookStack\Entities\Page;
+use BookStack\Entities\Models\Chapter;
+use BookStack\Entities\Models\Page;
 use BookStack\Settings\Setting;
 use BookStack\Settings\SettingService;
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Schema;
-use Validator;
+use URL;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,16 +24,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        // Custom validation methods
-        Validator::extend('image_extension', function ($attribute, $value, $parameters, $validator) {
-            $validImageExtensions = ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'tiff', 'webp'];
-            return in_array(strtolower($value->getClientOriginalExtension()), $validImageExtensions);
-        });
-
-        Validator::extend('no_double_extension', function ($attribute, $value, $parameters, $validator) {
-            $uploadName = $value->getClientOriginalName();
-            return substr_count($uploadName, '.') < 2;
-        });
+        // Set root URL
+        $appUrl = config('app.url');
+        if ($appUrl) {
+            $isHttps = (strpos($appUrl, 'https://') === 0);
+            URL::forceRootUrl($appUrl);
+            URL::forceScheme($isHttps ? 'https' : 'http');
+        }
 
         // Custom blade view directives
         Blade::directive('icon', function ($expression) {
@@ -63,7 +60,7 @@ class AppServiceProvider extends ServiceProvider
     public function register()
     {
         $this->app->singleton(SettingService::class, function ($app) {
-            return new SettingService($app->make(Setting::class), $app->make('Illuminate\Contracts\Cache\Repository'));
+            return new SettingService($app->make(Setting::class), $app->make(Repository::class));
         });
     }
 }
